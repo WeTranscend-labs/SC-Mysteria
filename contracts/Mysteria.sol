@@ -64,7 +64,8 @@ contract Mysteria is ERC721,ERC721Enumerable, ERC721URIStorage, ERC721Burnable, 
 
     function useKeyWithGasSponsor(Type keyType) external {
         require(userKeys[msg.sender][keyType] > 0, "You don't have enough keys for this type");
-        require(address(this).balance >= tx.gasprice * gasleft(), "Contract doesn't have enough balance to sponsor gas");
+
+        uint256 initialGas = gasleft();
 
         userKeys[msg.sender][keyType] -= 1;
 
@@ -76,10 +77,14 @@ contract Mysteria is ERC721,ERC721Enumerable, ERC721URIStorage, ERC721Burnable, 
 
         safeMint(msg.sender, selectedMetadata);
 
-        // Sponsor the gas by sending ETH to the user
-        uint256 gasCost = tx.gasprice * gasleft();
-        (bool success, ) = msg.sender.call{value: gasCost}("");
-        require(success, "Gas sponsorship failed");
+        uint256 gasUsed = initialGas - gasleft();
+
+        uint256 gasCost = tx.gasprice * gasUsed;
+
+        require(address(this).balance >= gasCost, "Insufficient contract balance for gas sponsorship");
+
+        (bool success, ) = payable(msg.sender).call{value: gasCost}("");
+        require(success, "Gas sponsorship transfer failed");
     }
 
     function safeMint(address to, string memory uri) public onlyOwner {
