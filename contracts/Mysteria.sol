@@ -8,7 +8,7 @@ import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-contract Mysteria is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
+contract Mysteria is ERC721,ERC721Enumerable, ERC721URIStorage, ERC721Burnable, Ownable {
     uint256 private _nextTokenId;
 
     enum Type { Bronze, Silver, Gold, Legendary }
@@ -39,7 +39,9 @@ contract Mysteria is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
     }
 
     function buyKey(Type keyType) external payable {
-        uint256 price = (uint256(keyType) + 1) * 1 ether;
+        uint256 basePrice = 0.2 ether;
+    
+        uint256 price = basePrice + (uint256(keyType) * 0.2 ether);
         require(msg.value >= price, "Insufficient funds to buy the key");
 
         userKeys[msg.sender][keyType] += 1;
@@ -47,6 +49,17 @@ contract Mysteria is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
         if (msg.value > price) {
             payable(msg.sender).transfer(msg.value - price);
         }
+    }
+
+    function getKeys(address user) external view returns (uint256[4] memory) {
+        uint256[4] memory keys;
+        
+        keys[0] = userKeys[user][Type.Bronze];
+        keys[1] = userKeys[user][Type.Silver];
+        keys[2] = userKeys[user][Type.Gold];
+        keys[3] = userKeys[user][Type.Legendary];
+        
+        return keys;
     }
 
     function useKeyWithGasSponsor(Type keyType) external {
@@ -75,7 +88,50 @@ contract Mysteria is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
         _setTokenURI(tokenId, uri);
     }
 
+    function getUserNFTsByType(address user, Type nftType) public view returns (uint256[] memory) {
+    uint256 balance = balanceOf(user);
+    uint256[] memory matchingTokenIds = new uint256[](balance);
+    uint256 count = 0;
+    
+    for (uint256 i = 0; i < balance; i++) {
+        uint256 tokenId = tokenOfOwnerByIndex(user, i);
+        string memory uri = tokenURI(tokenId);
+        
+        // So sánh URI để xác định loại NFT
+        for (uint256 j = 0; j < nftMetadata[nftType].length; j++) {
+            if (keccak256(abi.encodePacked(uri)) == keccak256(abi.encodePacked(nftMetadata[nftType][j]))) {
+                matchingTokenIds[count] = tokenId;
+                count++;
+                break;
+            }
+        }
+    }
+    
+    // Resize array to actual count
+    uint256[] memory result = new uint256[](count);
+    for (uint256 i = 0; i < count; i++) {
+        result[i] = matchingTokenIds[i];
+    }
+    
+    return result;
+}
+
     // The following functions are overrides required by Solidity.
+
+        function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable)
+        returns (address)
+    {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
+    }
 
     function tokenURI(uint256 tokenId)
         public
@@ -89,7 +145,7 @@ contract Mysteria is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721URIStorage)
+        override(ERC721, ERC721Enumerable, ERC721URIStorage)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
