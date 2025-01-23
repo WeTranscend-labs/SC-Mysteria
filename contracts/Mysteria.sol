@@ -16,6 +16,11 @@ contract Mysteria is ERC721,ERC721Enumerable, ERC721URIStorage, ERC721Burnable, 
     mapping(Type => string[]) public nftMetadata;
     mapping(address => mapping(Type => uint256)) public userKeys;
 
+    struct NFTInfo {
+        uint256 tokenId;
+        string tokenURI;
+    }
+
 
     constructor()
         ERC721("Mysteria", "M")
@@ -93,33 +98,71 @@ contract Mysteria is ERC721,ERC721Enumerable, ERC721URIStorage, ERC721Burnable, 
         _setTokenURI(tokenId, uri);
     }
 
-    function getUserNFTsByType(address user, Type nftType) public view returns (uint256[] memory) {
-    uint256 balance = balanceOf(user);
-    uint256[] memory matchingTokenIds = new uint256[](balance);
-    uint256 count = 0;
-    
-    for (uint256 i = 0; i < balance; i++) {
-        uint256 tokenId = tokenOfOwnerByIndex(user, i);
-        string memory uri = tokenURI(tokenId);
+    function getUserNFTsByType(address user, Type nftType) public view returns (NFTInfo[] memory) {
+        uint256 balance = balanceOf(user);
+        NFTInfo[] memory matchingNFTs = new NFTInfo[](balance);
+        uint256 count = 0;
         
-        // So sánh URI để xác định loại NFT
-        for (uint256 j = 0; j < nftMetadata[nftType].length; j++) {
-            if (keccak256(abi.encodePacked(uri)) == keccak256(abi.encodePacked(nftMetadata[nftType][j]))) {
-                matchingTokenIds[count] = tokenId;
-                count++;
-                break;
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(user, i);
+            string memory uri = tokenURI(tokenId);
+            
+            for (uint256 j = 0; j < nftMetadata[nftType].length; j++) {
+                if (keccak256(abi.encodePacked(uri)) == keccak256(abi.encodePacked(nftMetadata[nftType][j]))) {
+                    matchingNFTs[count] = NFTInfo(tokenId, uri);
+                    count++;
+                    break;
+                }
             }
         }
+        
+        NFTInfo[] memory result = new NFTInfo[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = matchingNFTs[i];
+        }
+        
+        return result;
     }
-    
-    // Resize array to actual count
-    uint256[] memory result = new uint256[](count);
-    for (uint256 i = 0; i < count; i++) {
-        result[i] = matchingTokenIds[i];
+
+    function upgradeToSilver() external returns (NFTInfo memory) {
+
+        uint256 randomIndex = uint256(
+            keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender))
+        ) % nftMetadata[Type.Silver].length;
+        
+        string memory newURI = nftMetadata[Type.Silver][randomIndex];
+        
+        uint256 newTokenId = _nextTokenId++;
+        _safeMint(msg.sender, newTokenId);
+        _setTokenURI(newTokenId, newURI);
+        
+        return NFTInfo({
+            tokenId: newTokenId,
+            tokenURI: newURI
+        });
     }
-    
-    return result;
-}
+
+    function _isNFTOfType(string memory uri, Type nftType) internal view returns (bool) {
+        for (uint256 i = 0; i < nftMetadata[nftType].length; i++) {
+            if (keccak256(abi.encodePacked(uri)) == keccak256(abi.encodePacked(nftMetadata[nftType][i]))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getAllUserNFTs(address user) public view returns (NFTInfo[] memory) {
+        uint256 balance = balanceOf(user);
+        NFTInfo[] memory userNFTs = new NFTInfo[](balance);
+        
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(user, i);
+            string memory uri = tokenURI(tokenId);
+            userNFTs[i] = NFTInfo(tokenId, uri);
+        }
+        
+        return userNFTs;
+    }
 
     // The following functions are overrides required by Solidity.
 
